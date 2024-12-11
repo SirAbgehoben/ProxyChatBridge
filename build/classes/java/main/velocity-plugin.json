@@ -1,0 +1,1 @@
+{"id":"velocitychatbridge","name":"Velocity Chat Bridge","version":"1.0-SNAPSHOT","description":"A plugin to bridge chat across Velocity servers","authors":[],"dependencies":[],"main":"plugin.proxychatbridge.ProxyChatBridge"}

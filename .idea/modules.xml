@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/ProxyChatBridge.iml" filepath="$PROJECT_DIR$/ProxyChatBridge.iml" />
+      <module fileurl="file://$PROJECT_DIR$/velocitychatbridge.iml" filepath="$PROJECT_DIR$/velocitychatbridge.iml" />
     </modules>
   </component>
 </project>

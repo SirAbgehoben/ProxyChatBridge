@@ -14,12 +14,15 @@ import com.velocitypowered.api.proxy.player.TabList;
 import com.velocitypowered.api.proxy.player.TabListEntry;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
+import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -33,12 +36,14 @@ import net.luckperms.api.node.types.WeightNode;
 import org.slf4j.Logger;
 
 import javax.inject.Inject;
+import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import static org.abgehoben.proxyChatBridge.TextComponentParser.parseToDiscordFormat;
@@ -121,6 +126,41 @@ public class proxyChatBridge extends ListenerAdapter {
     }
 
     @Subscribe
+    public void onMessageReceived(MessageReceivedEvent event) { //received form discord
+        if (event.getChannel().equals(defaultChannel)) {
+            String messageContent = event.getMessage().getContentDisplay();
+            String user = event.getAuthor().getEffectiveName();
+            String userrole = "Default";
+            Color rawRoleColor = null; //only works if role color is null? still getting error
+
+            if (event.getMember().getRoles() != null) {
+                userrole = event.getMember().getRoles().get(0).getName();
+            }
+            if (event.getMember().getRoles().get(0).getColor() != null) { //possible cause
+                rawRoleColor = event.getMember().getRoles().get(0).getColor();
+            }
+
+            String roleColor = TextComponentParser.getMinecraftColorCode(rawRoleColor);
+
+            logger.info("Message received in default channel: {} from user: {} with role {} that has color {}color", messageContent, user, userrole, roleColor);
+
+            TextComponent formattedMessage = Component.text()
+                    .append(Component.text("[", NamedTextColor.DARK_GRAY))
+                    .append(Component.text(roleColor + (userrole.equalsIgnoreCase("owner") ? "§l" : "") + userrole, NamedTextColor.WHITE)) //make text bold if role is owner to be in conjunction with minecraft rank
+                    .append(Component.text("][", NamedTextColor.DARK_GRAY))
+                    .append(Component.text(event.getGuild().getName(), NamedTextColor.WHITE))
+                    .append(Component.text("]", NamedTextColor.DARK_GRAY))
+                    .append(Component.text("<", NamedTextColor.WHITE))
+                    .append(Component.text(user, NamedTextColor.WHITE))
+                    .append(Component.text("> ", NamedTextColor.WHITE))
+                    .append(Component.text(messageContent, NamedTextColor.WHITE))
+                    .build();
+
+            server.getAllPlayers().forEach(p -> p.sendMessage(formattedMessage));
+        }
+    }
+
+    @Subscribe
     public void onProxyInitialization(ProxyInitializeEvent event) {
         createDefaultTokenFile();
         createDefaultChannelIdFile();
@@ -131,8 +171,10 @@ public class proxyChatBridge extends ListenerAdapter {
             return;
         }
 
-        JDABuilder builder = JDABuilder.createDefault(token);
-        builder.addEventListeners(this, new JdaReadyEventListener());
+        JDABuilder builder = JDABuilder.createDefault(token)
+                .enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MESSAGES)
+                .setActivity(Activity.playing("AbgehobenNetwork"))
+                .addEventListeners(this, new JdaReadyEventListener());
 
         try {
             jda = builder.build();

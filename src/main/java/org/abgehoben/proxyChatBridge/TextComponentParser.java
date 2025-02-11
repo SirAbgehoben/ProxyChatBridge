@@ -1,7 +1,10 @@
 package org.abgehoben.proxyChatBridge;
 
+import java.awt.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -202,4 +205,70 @@ public class TextComponentParser {
         }
         return combinedCode;
     }
+
+    //
+
+    static Color DARK_RED = new Color(139, 0, 0); // define a custom color constant
+    static Color DARK_GREEN = new Color(0, 128, 0); // define a custom color constant
+    static Color AQUA = new Color(0, 255, 255);
+    static Color DARK_AQUA = new Color(0, 128, 128); // define a custom color constant
+    static Color DARK_BLUE = new Color(0, 0, 128); // define a custom color constant
+    static Color PURPLE = new Color(128, 0, 128);
+
+    private static final Map<Color, String> colorToMinecraftCode = new HashMap<>();
+
+    static {
+        colorToMinecraftCode.put(Color.BLACK, "§0");
+        colorToMinecraftCode.put(Color.DARK_GRAY, "§8");
+        colorToMinecraftCode.put(Color.GRAY, "§7");
+        colorToMinecraftCode.put(Color.WHITE, "§f");
+        colorToMinecraftCode.put(Color.RED, "§c");
+        colorToMinecraftCode.put(TextComponentParser.DARK_RED, "§4");
+        colorToMinecraftCode.put(Color.ORANGE, "§6");
+        colorToMinecraftCode.put(Color.YELLOW, "§e");
+        colorToMinecraftCode.put(Color.GREEN, "§a");
+        colorToMinecraftCode.put(TextComponentParser.DARK_GREEN, "§2");
+        colorToMinecraftCode.put(TextComponentParser.AQUA, "§b");
+        colorToMinecraftCode.put(TextComponentParser.DARK_AQUA, "§3");
+        colorToMinecraftCode.put(Color.BLUE, "§9");
+        colorToMinecraftCode.put(TextComponentParser.DARK_BLUE, "§1");
+        colorToMinecraftCode.put(TextComponentParser.PURPLE, "§5");
+        colorToMinecraftCode.put(Color.MAGENTA, "§d");
+        colorToMinecraftCode.put(Color.PINK, "§d");
+    }
+
+    public static String getMinecraftColorCode(Color color) {
+        /*
+        if (color == null) {
+            color = Color.white; //wait what?
+        }
+        */
+
+        Color nearestColor = null;
+        double nearestDistance = Double.MAX_VALUE;
+
+        for (Color mcColor : colorToMinecraftCode.keySet()) {
+            double distance = getColorDistance(color, mcColor);
+            if (distance < nearestDistance) {
+                nearestDistance = distance;
+                nearestColor = mcColor;
+            }
+        }
+
+        return colorToMinecraftCode.getOrDefault(nearestColor, "§f");
+    }
+
+    public static double getColorDistance(Color c1, Color c2) {
+
+        if (c1 == null || c2 == null) {
+            Double o = null;
+            return o;
+        }
+
+        int rDiff = c1.getRed() - c2.getRed();
+        int gDiff = c1.getGreen() - c2.getGreen();
+        int bDiff = c1.getBlue() - c2.getBlue();
+        return Math.sqrt(rDiff * rDiff + gDiff * gDiff + bDiff * bDiff);
+    }
+
 }

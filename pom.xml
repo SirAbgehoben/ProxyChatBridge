@@ -14,8 +14,8 @@
     <properties>
         <java.version>17</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <velocity.version>3.1.1</velocity.version>
-        <adventure.version>4.11.0</adventure.version>
+        <velocity.version>3.4.0-SNAPSHOT</velocity.version>
+        <adventure.version>4.24.0</adventure.version>
         <luckperms.version>5.4</luckperms.version>
     </properties>
 

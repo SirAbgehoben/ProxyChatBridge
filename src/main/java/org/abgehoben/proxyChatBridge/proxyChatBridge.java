@@ -2,7 +2,6 @@ package org.abgehoben.proxyChatBridge;
 
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
-import com.velocitypowered.api.event.connection.PostLoginEvent;
 import com.velocitypowered.api.event.player.PlayerChatEvent;
 import com.velocitypowered.api.event.player.ServerConnectedEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
@@ -15,6 +14,7 @@ import com.velocitypowered.api.proxy.player.TabListEntry;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Activity;
+import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
@@ -33,6 +33,7 @@ import net.luckperms.api.model.user.UserManager;
 import net.luckperms.api.node.NodeType;
 import net.luckperms.api.node.types.InheritanceNode;
 import net.luckperms.api.node.types.WeightNode;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 
 import javax.inject.Inject;
@@ -82,8 +83,10 @@ public class proxyChatBridge extends ListenerAdapter {
         if (!tokenFile.exists()) {
             try {
                 Files.createDirectories(dataDirectory);
-                tokenFile.createNewFile();
-                logger.info("Created default token file at " + tokenFile.getAbsolutePath());
+                boolean created = tokenFile.createNewFile();
+                if (created) {
+                    logger.info("Created default token file at {}", tokenFile.getAbsolutePath());
+                }
             } catch (IOException e) {
                 logger.error("Error creating default token file", e);
             }
@@ -117,8 +120,10 @@ public class proxyChatBridge extends ListenerAdapter {
         if (!channelIdFile.exists()) {
             try {
                 Files.createDirectories(dataDirectory);
-                channelIdFile.createNewFile();
-                logger.info("Created default channel ID file at " + channelIdFile.getAbsolutePath());
+                boolean created = channelIdFile.createNewFile();
+                if (created) {
+                    logger.info("Created default channel ID file at {}", channelIdFile.getAbsolutePath());
+                }
             } catch (IOException e) {
                 logger.error("Error creating default channel ID file", e);
             }
@@ -126,27 +131,37 @@ public class proxyChatBridge extends ListenerAdapter {
     }
 
     @Subscribe
-    public void onMessageReceived(MessageReceivedEvent event) { //received form discord
+    public void onMessageReceived(MessageReceivedEvent event) { //Received a message from discord
+        if (event.getAuthor().isBot() || event.getAuthor().isSystem()) {
+            return;
+        }
+
         if (event.getChannel().equals(defaultChannel)) {
             String messageContent = event.getMessage().getContentDisplay();
             String user = event.getAuthor().getEffectiveName();
-            String userrole = "Default";
-            Color rawRoleColor = null; //only works if role color is null? still getting error
+            String userRole = "Default";
+            Color rawRoleColor = null;
 
-            if (event.getMember().getRoles() != null) {
-                userrole = event.getMember().getRoles().get(0).getName();
+            List<Role> roles = Objects.requireNonNull(event.getMember()).getRoles();
+            if (!roles.isEmpty()) {
+                userRole = roles.get(0).getName();
             }
-            if (event.getMember().getRoles().get(0).getColor() != null) { //possible cause
-                rawRoleColor = event.getMember().getRoles().get(0).getColor();
+            if (event.getMember().getRoles().get(0).getColor() != null) {
+                rawRoleColor = roles.get(0).getColor();
             }
 
-            String roleColor = TextComponentParser.getMinecraftColorCode(rawRoleColor);
+            String roleColor;
+            if (rawRoleColor == null) {
+                roleColor = "§f"; // default white color
+            } else {
+                roleColor = TextComponentParser.getMinecraftColorCode(rawRoleColor);
+            }
 
-            logger.info("Message received in default channel: {} from user: {} with role {} that has color {}color", messageContent, user, userrole, roleColor);
+            logger.info("Message received in default channel: {} from user: {} with role {} that has color {}color", messageContent, user, userRole, roleColor);
 
             TextComponent formattedMessage = Component.text()
                     .append(Component.text("[", NamedTextColor.DARK_GRAY))
-                    .append(Component.text(roleColor + (userrole.equalsIgnoreCase("owner") ? "§l" : "") + userrole, NamedTextColor.WHITE)) //make text bold if role is owner to be in conjunction with minecraft rank
+                    .append(Component.text(roleColor + (userRole.equalsIgnoreCase("owner") ? "§l" : "") + userRole, NamedTextColor.WHITE))
                     .append(Component.text("][", NamedTextColor.DARK_GRAY))
                     .append(Component.text(event.getGuild().getName(), NamedTextColor.WHITE))
                     .append(Component.text("]", NamedTextColor.DARK_GRAY))
@@ -185,7 +200,7 @@ public class proxyChatBridge extends ListenerAdapter {
 
     public class JdaReadyEventListener extends ListenerAdapter {
         @Override
-        public void onReady(ReadyEvent event) {
+        public void onReady(@NotNull ReadyEvent event) {
             logger.info("JDA is ready!");
 
             String defaultChannelId = readDefaultChannelIdFile();
@@ -214,11 +229,7 @@ public class proxyChatBridge extends ListenerAdapter {
                 return;
             }
 
-            TextChannel channel = event.getOption("channel").getAsChannel().asTextChannel();
-            if (channel == null) {
-                event.reply("Error: Invalid channel type. Please select a text channel.").setEphemeral(true).queue();
-                return;
-            }
+            TextChannel channel = Objects.requireNonNull(event.getOption("channel")).getAsChannel().asTextChannel();
 
             defaultChannel = channel;
             writeDefaultChannelIdFile(channel.getId());
@@ -290,32 +301,28 @@ public class proxyChatBridge extends ListenerAdapter {
             if (defaultChannel != null && !discordFormatedMessage.isEmpty()) {
                 defaultChannel.sendMessage(discordFormatedMessage).queue();
             }
-
             server.getAllPlayers().forEach(p -> p.sendMessage(joinMessage));
-            // Update the tablist for all players when a new player joins
-            updateTabList();
-            return;
+        } else {
+            TextComponent switchMessage = Component.text()
+                    .append(Component.text("[", NamedTextColor.DARK_GRAY))
+                    .append(Component.text("⇄", NamedTextColor.AQUA))
+                    .append(Component.text("] ", NamedTextColor.DARK_GRAY))
+                    .append(Component.text(playerName, NamedTextColor.WHITE))
+                    .append(Component.text(" switched from ", NamedTextColor.GREEN))
+                    .append(Component.text(fromServer, NamedTextColor.WHITE))
+                    .append(Component.text(" to ", NamedTextColor.GREEN))
+                    .append(Component.text(toServer, NamedTextColor.WHITE))
+                    .build();
+
+            String messageInformationContent = switchMessage.toString();
+            String discordFormatedMessage = parseToDiscordFormat(messageInformationContent);
+
+            if (defaultChannel != null && !discordFormatedMessage.isEmpty()) {
+                defaultChannel.sendMessage(discordFormatedMessage).queue();
+            }
+
+            server.getAllPlayers().forEach(p -> p.sendMessage(switchMessage));
         }
-
-        TextComponent switchMessage = Component.text()
-                .append(Component.text("[", NamedTextColor.DARK_GRAY))
-                .append(Component.text("⇄", NamedTextColor.AQUA))
-                .append(Component.text("] ", NamedTextColor.DARK_GRAY))
-                .append(Component.text(playerName, NamedTextColor.WHITE))
-                .append(Component.text(" switched from ", NamedTextColor.GREEN))
-                .append(Component.text(fromServer, NamedTextColor.WHITE))
-                .append(Component.text(" to ", NamedTextColor.GREEN))
-                .append(Component.text(toServer, NamedTextColor.WHITE))
-                .build();
-
-        String messageInformationContent = switchMessage.toString();
-        String discordFormatedMessage = parseToDiscordFormat(messageInformationContent);
-
-        if (defaultChannel != null && !discordFormatedMessage.isEmpty()) {
-            defaultChannel.sendMessage(discordFormatedMessage).queue();
-        }
-
-        server.getAllPlayers().forEach(p -> p.sendMessage(switchMessage));
         updateTabList();
     }
 
@@ -373,7 +380,7 @@ public class proxyChatBridge extends ListenerAdapter {
                                     .build();
 
                             tabList.addEntry(TabListEntry.builder()
-                                    .tabList(tabList) // Ensure tabList is set
+                                    .tabList(tabList) // Ensure the tabList is set
                                     .profile(target.getGameProfile())
                                     .displayName(tabListEntry)
                                     .latency((int) target.getPing()) // Cast long to int

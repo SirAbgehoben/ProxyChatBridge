@@ -9,8 +9,6 @@ import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ProxyServer;
-import com.velocitypowered.api.proxy.player.TabList;
-import com.velocitypowered.api.proxy.player.TabListEntry;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Activity;
@@ -26,13 +24,11 @@ import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.luckperms.api.LuckPerms;
 import net.luckperms.api.LuckPermsProvider;
 import net.luckperms.api.model.group.Group;
 import net.luckperms.api.model.user.UserManager;
 import net.luckperms.api.node.NodeType;
 import net.luckperms.api.node.types.InheritanceNode;
-import net.luckperms.api.node.types.WeightNode;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 
@@ -49,8 +45,12 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.abgehoben.proxyChatBridge.TextComponentParser.parseToDiscordFormat;
 
-@Plugin(id = "velocitychatbridge", name = "Velocity Chat Bridge", version = "1.0-SNAPSHOT", description = "A plugin to bridge chat across Velocity servers")
-public class proxyChatBridge extends ListenerAdapter {
+@Plugin(id = "proxychatbridge",
+        name = "Proxy Chat Bridge",
+        version = "1.0-SNAPSHOT",
+        authors = {"SirAbgehoben"},
+        description = "A plugin to bridge chat across Velocity servers")
+public class ProxyChatBridge extends ListenerAdapter {
 
     private final ProxyServer server;
     private final Logger logger;
@@ -63,7 +63,7 @@ public class proxyChatBridge extends ListenerAdapter {
     private static final String DEFAULT_CHANNEL_ID_FILE_PATH = "default_channel_id.txt";
 
     @Inject
-    public proxyChatBridge(ProxyServer server, Logger logger, @DataDirectory Path dataDirectory) {
+    public ProxyChatBridge(ProxyServer server, Logger logger, @DataDirectory Path dataDirectory) {
         this.server = server;
         this.logger = logger;
         this.dataDirectory = dataDirectory;
@@ -177,6 +177,10 @@ public class proxyChatBridge extends ListenerAdapter {
 
     @Subscribe
     public void onProxyInitialization(ProxyInitializeEvent event) {
+        GlobalTabList globalTabList = new GlobalTabList(this, this.server, this.logger);
+        this.server.getEventManager().register(this, globalTabList);
+        logger.info("Loaded Tablist");
+
         createDefaultTokenFile();
         createDefaultChannelIdFile();
 
@@ -190,12 +194,13 @@ public class proxyChatBridge extends ListenerAdapter {
                 .enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MESSAGES)
                 .setActivity(Activity.playing("AbgehobenNetwork"))
                 .addEventListeners(this, new JdaReadyEventListener());
-
         try {
             jda = builder.build();
         } catch (Exception e) {
             logger.error("Error creating JDA instance", e);
         }
+
+
     }
 
     public class JdaReadyEventListener extends ListenerAdapter {
@@ -271,6 +276,7 @@ public class proxyChatBridge extends ListenerAdapter {
             server.getAllPlayers().forEach(p -> p.sendMessage(formattedMessage));
         });
 
+        //noinspection deprecation
         event.setResult(PlayerChatEvent.ChatResult.denied());
     }
 
@@ -323,7 +329,6 @@ public class proxyChatBridge extends ListenerAdapter {
 
             server.getAllPlayers().forEach(p -> p.sendMessage(switchMessage));
         }
-        updateTabList();
     }
 
     @Subscribe
@@ -351,49 +356,9 @@ public class proxyChatBridge extends ListenerAdapter {
         }
 
         server.getAllPlayers().forEach(p -> p.sendMessage(leaveMessage));
-        updateTabList();
     }
 
-    private void updateTabList() {
-        server.getAllPlayers().forEach(player -> {
-            TabList tabList = player.getTabList();
-
-            // Remove existing entries (compatible with older Velocity versions)
-            for (TabListEntry entry : new ArrayList<>(tabList.getEntries())) {
-                tabList.removeEntry(entry.getProfile().getId());
-            }
-
-            List<CompletableFuture<Void>> futures = new ArrayList<>();
-
-            server.getAllPlayers().stream()
-                    .sorted(Comparator.comparingInt(this::getLuckPermsWeight).reversed())
-                    .forEachOrdered(target -> {
-                        String serverName = target.getCurrentServer().map(s -> s.getServerInfo().getName()).orElse("Unknown");
-                        CompletableFuture<Void> future = getLuckPermsGroupName(target).thenAccept(groupName -> {
-                            Component tabListEntry = Component.text()
-                                    .append(Component.text("[", NamedTextColor.DARK_GRAY))
-                                    .append(Component.text(groupName))
-                                    .append(Component.text("][", NamedTextColor.DARK_GRAY))
-                                    .append(Component.text(serverName, NamedTextColor.WHITE))
-                                    .append(Component.text("] ", NamedTextColor.DARK_GRAY))
-                                    .append(Component.text(target.getUsername(), NamedTextColor.WHITE))
-                                    .build();
-
-                            tabList.addEntry(TabListEntry.builder()
-                                    .tabList(tabList) // Ensure the tabList is set
-                                    .profile(target.getGameProfile())
-                                    .displayName(tabListEntry)
-                                    .latency((int) target.getPing()) // Cast long to int
-                                    .build());
-                        });
-                        futures.add(future);
-                    });
-
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-        });
-    }
-
-    private CompletableFuture<String> getLuckPermsGroupName(Player player) {
+    public static CompletableFuture<String> getLuckPermsGroupName(Player player) {
         UserManager userManager = LuckPermsProvider.get().getUserManager();
         return userManager.loadUser(player.getUniqueId()).thenApply(user -> {
             if (user != null) {
@@ -412,29 +377,5 @@ public class proxyChatBridge extends ListenerAdapter {
             }
             return "Default";
         });
-    }
-
-    private int getLuckPermsWeight(Player player) {
-        // Access LuckPerms API using static provider
-        LuckPerms luckPerms = LuckPermsProvider.get();
-        UserManager userManager = luckPerms.getUserManager();
-        CompletableFuture<Integer> weightFuture = userManager.loadUser(player.getUniqueId()).thenApply(user -> {
-            if (user != null) {
-                return user.getNodes().stream()
-                        .filter(NodeType.WEIGHT::matches)
-                        .map(NodeType.WEIGHT::cast)
-                        .mapToInt(WeightNode::getWeight)
-                        .findFirst()
-                        .orElse(0);
-            }
-            return 0;
-        });
-
-        try {
-            return weightFuture.get();
-        } catch (Exception e) {
-            logger.error("Error getting weight from luckperms", e);
-            return 0;
-        }
     }
 }

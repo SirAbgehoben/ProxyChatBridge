@@ -32,7 +32,7 @@ import net.luckperms.api.node.types.InheritanceNode;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 
-import javax.inject.Inject;
+import com.google.inject.Inject;
 import java.awt.*;
 import java.io.File;
 import java.io.IOException;
@@ -47,7 +47,7 @@ import static org.abgehoben.proxyChatBridge.TextComponentParser.parseToDiscordFo
 
 @Plugin(id = "proxychatbridge",
         name = "Proxy Chat Bridge",
-        version = "1.0-SNAPSHOT",
+        version = "1.1-SNAPSHOT",
         authors = {"SirAbgehoben"},
         description = "A plugin to bridge chat across Velocity servers")
 public class ProxyChatBridge extends ListenerAdapter {

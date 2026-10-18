@@ -144,10 +144,10 @@ public class ProxyChatBridge extends ListenerAdapter {
 
             List<Role> roles = Objects.requireNonNull(event.getMember()).getRoles();
             if (!roles.isEmpty()) {
-                userRole = roles.get(0).getName();
+                userRole = roles.getFirst().getName();
             }
-            if (event.getMember().getRoles().get(0).getColor() != null) {
-                rawRoleColor = roles.get(0).getColor();
+            if (event.getMember().getRoles().getFirst().getColors().getPrimary() != null) {
+                rawRoleColor = roles.getFirst().getColors().getPrimary();
             }
 
             String roleColor;
@@ -268,7 +268,7 @@ public class ProxyChatBridge extends ListenerAdapter {
 
             if (defaultChannel != null && !discordFormatedMessage.isEmpty()) {
                 defaultChannel.sendMessage(discordFormatedMessage).queue(
-                        message -> logger.info("Sent message to Discord: {}", discordFormatedMessage),
+                        _ -> logger.info("Sent message to Discord: {}", discordFormatedMessage),
                         error -> logger.error("Failed to send message to Discord", error)
                 );
             }
